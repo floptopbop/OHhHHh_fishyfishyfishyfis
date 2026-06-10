@@ -3,145 +3,200 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Volumetric Nano Swarm</title>
+    <title>Volumetric Nano Swarm - TrueColor Master</title>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #042a2b; overflow: hidden; font-family: monospace; user-select: none; touch-action: none; }
-        pre { position: absolute; top: 0; left: 0; margin: 0; width: 100vw; height: 100vh; line-height: 6px; font-size: 6px; color: rgba(98, 192, 255, 0.99); z-index: 0; pointer-events: none; }
-        canvas { position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; display: block; }
+        body, html { 
+            margin: 0; 
+            padding: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: #19232F; 
+            overflow: hidden; 
+            font-family: monospace; 
+            user-select: none; 
+            touch-action: none; 
+        }
+        canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            display: block; 
+            width: 100vw; 
+            height: 100vh;
+        }
     </style>
 </head>
 <body>
-    <pre id="bg"></pre>
-    <canvas id="termCanvas"></canvas>
-    <script>
-        const C = document.getElementById('termCanvas'), X = C.getContext('2d');
-        const bg = document.getElementById('bg');
-        let W, H, time = 0, drag = null;
-        const P = [], K = [], PADS = [], DF = [];
-        const MAX_FISH = 12;
 
-        let W_g, H_g, b1, b2, outRows;
+    <canvas id="termCanvas"></canvas>
+
+    <script>
+        // =====================================================================
+        // 1. GLOBAL ENGINE CONFIGURATION
+        // =====================================================================
+        const CFG = {
+            fontSize: 6,
+            fontFamily: "monospace",
+            charW: 3.2,   
+            charH: 7.2,   
+            
+            // TrueColor Liquid Gradients
+            colorBg:       "#000828",
+            colorDeepWater:"#1d2b3a",
+            colorCalmWater:"#25374a",
+            colorRipple:   "#52b0ef",
+            colorFoam:     "#ffffff",
+            
+            maxFish: 12
+        };
+
+        const C = document.getElementById('termCanvas');
+        const X = C.getContext('2d', { alpha: false }); 
+        
+        let W, H, time = 0, drag = null;
+        let W_g, H_g;
+        let b1, b2;
+        
+        const P = [], K = [], PADS = [], DF = [];
         const wavechars = "·░.◦▓◌○◍◉●";
 
-        (window.onresize = () => {
-            W = C.width = innerWidth;
-            H = C.height = innerHeight;
-            X.textBaseline = 'middle';
-            X.textAlign = 'center';
-            X.font = '6px monospace';
-            W_g = Math.floor(W / 3.5);
-            H_g = Math.floor(H / 6);
+        // SERENITY CONSTANTS: Snap lingering subpixel noise to zero
+        const WATER_DEADBAND = 0.008; 
+
+        function resize() {
+            W = C.width = window.innerWidth;
+            H = C.height = window.innerHeight;
+            
+            W_g = Math.floor(W / CFG.charW);
+            H_g = Math.floor(H / CFG.charH);
+            
             b1 = new Float32Array(W_g * H_g);
             b2 = new Float32Array(W_g * H_g);
-            outRows = new Array(H_g);
-        })();
+        }
+        window.onresize = resize;
+        resize();
 
-        // ── Fluid Dynamics ────────────────────────────────────────────
+        // =====================================================================
+        // 2. FLUID ACCELERATION CORE
+        // =====================================================================
         function splash(cx, cy, radius, force) {
-            for(let y = -radius; y <= radius; y++)
+            for(let y = -radius; y <= radius; y++) {
                 for(let x = -radius; x <= radius; x++) {
-                    let px = cx+x, py = cy+y;
-                    if(px>0 && py>0 && px<W_g-1 && py<H_g-1) b1[py*W_g+px] = force;
+                    let px = cx + x;
+                    let py = cy + y;
+                    if(px > 0 && py > 0 && px < W_g - 1 && py < H_g - 1) {
+                        b1[py * W_g + px] = force;
+                    }
                 }
+            }
         }
 
-        // ── Input ─────────────────────────────────────────────────────
         window.onpointerdown = e => {
-            if(e.clientX > W-60 && e.clientY > H-60) {
-                let pellet = { x:e.clientX, y:e.clientY, r:0, vx:(Math.random()-0.5)*3, vy:-(4+Math.random()*3), settled:false };
+            if(e.clientX > W - 70 && e.clientY > H - 70) {
+                let pellet = { x: e.clientX, y: e.clientY, r: 0, vx: (Math.random() - 0.5) * 3, vy: -(4 + Math.random() * 3), settled: false };
                 P.push(pellet); drag = pellet;
             } else {
-                splash(Math.floor(e.clientX/W*W_g), Math.floor(e.clientY/H*H_g), 2, 4);
+                splash(Math.floor(e.clientX / CFG.charW), Math.floor(e.clientY / CFG.charH), 2, 6);
             }
         };
         window.onpointermove = e => {
-            if(drag) { drag.vx=(e.clientX-drag.x)*.4; drag.vy=(e.clientY-drag.y)*.4; drag.x=e.clientX; drag.y=e.clientY; }
-            else if(e.buttons) splash(Math.floor(e.clientX/W*W_g), Math.floor(e.clientY/H*H_g), 1, 3);
+            if(drag) { 
+                drag.vx = (e.clientX - drag.x) * .4; 
+                drag.vy = (e.clientY - drag.y) * .4; 
+                drag.x = e.clientX; 
+                drag.y = e.clientY; 
+            } else if(e.buttons) {
+                splash(Math.floor(e.clientX / CFG.charW), Math.floor(e.clientY / CFG.charH), 1, 4);
+            }
         };
-        window.onpointerup = () => drag && (drag.r=1, drag=null);
+        window.onpointerup = () => drag && (drag.r = 1, drag = null);
 
-        // ── Koi Palette ───────────────────────────────────────────────
         const KP = {
-            brown:'#754946', gold:'#FBE47A', white:'#FEFCFD',
-            red:'#C51D24', orange:'#F79705', blue:'#5E6D94',
-            lilac:'#DCD5DD', rose:'#BE4647', tangerine:'#E87007',
-            black:'#10060E'
+            brown: '#754946', gold: '#FBE47A', white: '#FEFCFD',
+            red: '#C51D24', orange: '#F79705', blue: '#5E6D94',
+            lilac: '#DCD5DD', rose: '#BE4647', tangerine: '#E87007',
+            black: '#10060E'
         };
 
-        // ── Koi Class ─────────────────────────────────────────────────
+        // =====================================================================
+        // 3. ECOSYSTEM ENTITIES
+        // =====================================================================
         class Koi {
             constructor(x, y, parentScale) {
                 this.s = parentScale ? Math.max(0.3, parentScale * 0.55) : (0.3 + Math.random() * 0.45);
-                this.nodes = Array.from({length:12}, () => ({x: x ?? W*Math.random(), y: y ?? H*Math.random(), a:0}));
+                this.nodes = Array.from({length: 12}, () => ({x: x ?? W * Math.random(), y: y ?? H * Math.random(), a: 0}));
                 this.off = Math.random() * 1e3;
                 this.ang = Math.random() * 6.28;
-                this.spd = 0.35 + Math.random() * 0.25;
                 this.z = 0.25;
                 this.bob = 0;
-                // growth
                 this.foodEaten = 0;
                 this.foodToGrow = 5;
                 this.maxScale = 1.4;
                 this.canSpawn = false;
-                // pattern
                 this.col = this._genPattern();
                 this._updateGeom();
             }
 
             _genPattern() {
                 const n = 12, cols = new Array(n);
-                const pick = arr => arr[Math.floor(Math.random()*arr.length)];
-                const type = ['kohaku','sanke','showa','tancho','ogon','asagi','random'][Math.floor(Math.random()*7)];
+                const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+                const type = ['kohaku','sanke','showa','tancho','ogon','asagi','random'][Math.floor(Math.random() * 7)];
                 switch(type) {
                     case 'kohaku':
                         cols.fill(KP.white);
-                        for(let i=0;i<n;i++) if(Math.random()<.45) cols[i]=pick([KP.red,KP.rose,KP.orange,KP.tangerine,KP.brown]);
+                        for(let i = 0; i < n; i++) if(Math.random() < .45) cols[i] = pick([KP.red, KP.rose, KP.orange, KP.tangerine, KP.brown]);
                         break;
                     case 'sanke':
                         cols.fill(KP.white);
-                        for(let i=0;i<n;i++) if(Math.random()<.35) cols[i]=pick([KP.red,KP.rose,KP.orange,KP.tangerine]);
-                        for(let i=0;i<n;i++) if(Math.random()<.15) cols[i]=KP.black;
+                        for(let i = 0; i < n; i++) if(Math.random() < .35) cols[i] = pick([KP.red, KP.rose, KP.orange, KP.tangerine]);
+                        for(let i = 0; i < n; i++) if(Math.random() < .15) cols[i] = KP.black;
                         break;
                     case 'showa':
                         cols.fill(KP.black);
-                        for(let i=0;i<n;i++) { const r=Math.random(); if(r<.3) cols[i]=KP.white; else if(r<.55) cols[i]=pick([KP.red,KP.rose,KP.tangerine,KP.orange]); }
+                        for(let i = 0; i < n; i++) { 
+                            const r = Math.random(); 
+                            if(r < .3) cols[i] = KP.white; 
+                            else if(r < .55) cols[i] = pick([KP.red, KP.rose, KP.tangerine, KP.orange]); 
+                        }
                         break;
                     case 'tancho':
-                        cols.fill(KP.white); cols[0]=KP.red;
+                        cols.fill(KP.white); cols[0] = KP.red;
                         break;
                     case 'ogon':
-                        cols.fill(pick([KP.gold,KP.orange,KP.lilac,KP.tangerine]));
+                        cols.fill(pick([KP.gold, KP.orange, KP.lilac, KP.tangerine]));
                         break;
                     case 'asagi':
-                        for(let i=0;i<n;i++) cols[i] = i<4?KP.blue : i<8?KP.white : pick([KP.brown,KP.rose,KP.red]);
+                        for(let i = 0; i < n; i++) cols[i] = i < 4 ? KP.blue : i < 8 ? KP.white : pick([KP.brown, KP.rose, KP.red]);
                         break;
                     default:
                         const all = Object.values(KP);
-                        for(let i=0;i<n;i++) cols[i]=pick(all);
+                        for(let i = 0; i < n; i++) cols[i] = pick(all);
                 }
                 return cols;
             }
 
             _updateGeom() {
-                this.thk = [2,3,3,3,3,2.8,2.2,1.6,1.2,.8,.5,.2].map(t => t * this.s * 1.4);
-                this.spdBase = 0.35 + (1.0 - Math.min(this.s,1.0)) * 0.3;
+                this.thk = [2, 3, 3, 3, 3, 2.8, 2.2, 1.6, 1.2, .8, .5, .2].map(t => t * this.s * 1.4);
+                this.spdBase = 0.35 + (1.0 - Math.min(this.s, 1.0)) * 0.3;
             }
 
             eatFood(fishArray, isDragonfly) {
-                this.foodEaten += isDragonfly ? 3 : 1; // dragonfly worth more
-                if(this.foodEaten >= this.foodToGrow && this.s < this.maxScale) {
-                    this.s = Math.min(this.maxScale, this.s + 0.04);
-                    this._updateGeom();
+                this.foodEaten += isDragonfly ? 3 : 1;
+                if(this.foodEaten >= this.foodToGrow) {
+                    if(this.s < this.maxScale) {
+                        this.s = Math.min(this.maxScale, this.s + 0.04);
+                        this._updateGeom();
+                    }
                     this.foodEaten = 0;
                     this.canSpawn = true;
                 }
-                if(this.canSpawn && this.s > 0.85 && fishArray.length < MAX_FISH) {
+                
+                if(this.canSpawn && this.s > 0.85 && fishArray.length < CFG.maxFish) {
                     if(Math.random() < 0.5) {
                         let h = this.nodes[0];
-                        let baby = new Koi(h.x + (Math.random()-0.5)*50, h.y + (Math.random()-0.5)*50, this.s);
+                        let baby = new Koi(h.x + (Math.random() - 0.5) * 50, h.y + (Math.random() - 0.5) * 50, this.s);
                         fishArray.push(baby);
-                        // tiny spawn ripple
-                        splash(Math.floor(h.x/W*W_g), Math.floor(h.y/H*H_g), 1, 1.5);
+                        splash(Math.floor(h.x / CFG.charW), Math.floor(h.y / CFG.charH), 1, 1.5);
                     }
                     this.canSpawn = false;
                 }
@@ -149,79 +204,83 @@
 
             update(fishArray) {
                 let t = time + this.off, h = this.nodes[0], ts = this.spdBase;
-                let tx = W/2 + Math.cos(t*.05)*W*.2 + Math.sin(t*.1)*100;
-                let ty = H/2 + Math.sin(t*.11)*H*.3 + Math.cos(t*.26)*100;
+                let tx = W / 2 + Math.cos(t * .05) * W * .2 + Math.sin(t * .1) * 100;
+                let ty = H / 2 + Math.sin(t * .11) * H * .3 + Math.cos(t * .26) * 100;
                 let ta = -1, md = Infinity;
 
-                for(let i=0;i<P.length;i++) {
+                for(let i = 0; i < P.length; i++) {
                     if(!P[i].r) continue;
-                    let d = (P[i].x-h.x)**2 + (P[i].y-h.y)**2;
-                    if(d < md) { md=d; ta=i; }
+                    let d = (P[i].x - h.x) ** 2 + (P[i].y - h.y) ** 2;
+                    if(d < md) { md = d; ta = i; }
                 }
 
-                if(ta>=0 && md<250000) this.bob=20;
-                else if(Math.random()<0.0003) this.bob=30+Math.random()*40;
-
-                if(this.bob>0) { this.bob--; this.z=Math.min(1.0,this.z+0.04); }
-                else this.z=Math.max(0.25,this.z-0.008);
-
-                if(ta>=0 && md<250000) {
-                    tx=P[ta].x; ty=P[ta].y; ts*=1.4;
-                    if(md < 200*this.s) {
-                        let eaten = P[ta];
-                        let isDF = eaten.isDragonfly && eaten.dfRef;
-                        if(isDF) eaten.dfRef.beEaten();
-                        else P.splice(ta,1);
-                        this.eatFood(fishArray, isDF);
-                        splash(Math.floor(h.x/W*W_g), Math.floor(h.y/H*H_g), Math.max(1,Math.round(this.s*4)), 3+this.s*5);
+                if(ta >= 0 && md < 250000) {
+                    let targetPellet = P[ta];
+                    if(targetPellet) {
+                        tx = targetPellet.x; ty = targetPellet.y; ts *= 1.4;
+                        if(md < 200 * this.s) {
+                            let pIdx = P.indexOf(targetPellet);
+                            if(pIdx > -1) P.splice(pIdx, 1);
+                            let isDF = targetPellet.isDragonfly && targetPellet.dfRef;
+                            if(isDF) targetPellet.dfRef.eaten = true;
+                            this.eatFood(fishArray, isDF);
+                            splash(Math.floor(h.x / CFG.charW), Math.floor(h.y / CFG.charH), Math.max(1, Math.round(this.s * 4)), 3 + this.s * 5);
+                        }
                     }
                 }
 
-                let ad = Math.atan2(ty-h.y, tx-h.x) - this.ang;
-                while(ad<-Math.PI) ad+=Math.PI*2;
-                while(ad>Math.PI) ad-=Math.PI*2;
-                let trn = ta>=0 ? .09 : .03;
+                let ad = Math.atan2(ty - h.y, tx - h.x) - this.ang;
+                while(ad < -Math.PI) ad += Math.PI * 2;
+                while(ad > Math.PI) ad -= Math.PI * 2;
+                let trn = ta >= 0 ? .09 : .03;
                 this.ang += Math.max(-trn, Math.min(trn, ad));
-                let yaw = this.ang + Math.sin(t*(ta>=0?6:3.2))*(ta>=0?.25:.15);
+                let yaw = this.ang + Math.sin(t * (ta >= 0 ? 6 : 3.2)) * (ta >= 0 ? .25 : .15);
 
-                h.x += Math.cos(yaw)*ts; h.y += Math.sin(yaw)*ts; h.a=yaw;
+                h.x += Math.cos(yaw) * ts; h.y += Math.sin(yaw) * ts; h.a = yaw;
 
-                const margin=20;
-                if(h.x<-margin) h.x+=W+margin*2; else if(h.x>W+margin) h.x-=W+margin*2;
-                if(h.y<-margin) h.y+=H+margin*2; else if(h.y>H+margin) h.y-=H+margin*2;
+                const margin = 20;
+                if(h.x < -margin) h.x += W + margin * 2; else if(h.x > W + margin) h.x -= W + margin * 2;
+                if(h.y < -margin) h.y += H + margin * 2; else if(h.y > H + margin) h.y -= H + margin * 2;
 
-                if(this.z>0.9 && Math.random()>0.99)
-                    splash(Math.floor(h.x/W*W_g), Math.floor(h.y/H*H_g), 0, 0.6+this.s*0.8);
+                // Subtle fluid trailing tracking
+                let hgx = Math.floor(h.x / CFG.charW);
+                let hgy = Math.floor(h.y / CFG.charH);
+                if(hgx > 0 && hgx < W_g - 1 && hgy > 0 && hgy < H_g - 1) {
+                    b1[hgy * W_g + hgx] += 0.12 * this.s;
+                }
 
-                for(let i=1;i<12;i++) {
-                    let p=this.nodes[i-1], c=this.nodes[i], a=Math.atan2(c.y-p.y,c.x-p.x);
-                    c.x=p.x+Math.cos(a)*(7*this.s); c.y=p.y+Math.sin(a)*(7*this.s); c.a=a+Math.PI;
-                    if(i===11 && this.z>0.9 && Math.random()>0.994)
-                        splash(Math.floor(c.x/W*W_g), Math.floor(c.y/H*H_g), 0, 0.2+this.s*0.4);
+                for(let i = 1; i < 12; i++) {
+                    let p = this.nodes[i - 1], c = this.nodes[i], a = Math.atan2(c.y - p.y, c.x - p.x);
+                    c.x = p.x + Math.cos(a) * (7 * this.s); c.y = p.y + Math.sin(a) * (7 * this.s); c.a = a + Math.PI;
+                    
+                    if(i === 11) {
+                        let tgx = Math.floor(c.x / CFG.charW);
+                        let tgy = Math.floor(c.y / CFG.charH);
+                        if(tgx > 0 && tgx < W_g - 1 && tgy > 0 && tgy < H_g - 1) {
+                            b1[tgy * W_g + tgx] += 0.08 * Math.sin(time * 4) * this.s;
+                        }
+                    }
                 }
             }
 
             draw() {
                 X.globalAlpha = this.z;
-                // tail fan
                 let tf = this.nodes[10];
                 X.fillStyle = 'rgba(230,245,255,.3)';
-                X.setTransform(this.s*2,0,0,this.s*2,tf.x,tf.y);
-                X.rotate(tf.a + Math.sin(time*4)*.18);
-                X.fillText('░',-2,0);
-                // body — volumetric single-pass with edge char
-                for(let i=11;i>=0;i--) {
-                    let n=this.nodes[i], s=this.thk[i];
+                X.setTransform(this.s * 2, 0, 0, this.s * 2, tf.x, tf.y);
+                X.rotate(tf.a + Math.sin(time * 4) * .18);
+                X.fillText('░', -2, 0);
+                
+                for(let i = 11; i >= 0; i--) {
+                    let n = this.nodes[i], s = this.thk[i];
                     X.fillStyle = this.col[i];
-                    X.setTransform(s,0,0,s,n.x,n.y);
+                    X.setTransform(s, 0, 0, s, n.x, n.y);
                     X.rotate(n.a);
-                    // outer ring glyph + fill
-                    X.fillText(i===0?'ö': s>1.8?'▓':'█', 0, 0);
-                    if(s>2.2) {
-                        // second inner layer for chunkier fish
-                        X.setTransform(s*0.55,0,0,s*0.55,n.x,n.y);
+                    X.fillText(i === 0 ? 'ö' : s > 1.8 ? '▓' : '█', 0, 0);
+                    if(s > 2.2) {
+                        X.setTransform(s * 0.55, 0, 0, s * 0.55, n.x, n.y);
                         X.rotate(n.a);
-                        X.fillText('█',0,0);
+                        X.fillText('█', 0, 0);
                     }
                 }
                 X.resetTransform();
@@ -229,208 +288,246 @@
             }
         }
 
-        // ── Lily Pads ─────────────────────────────────────────────────
         class LilyPad {
             constructor() {
-                this.x = 80+Math.random()*(W-160);
-                this.y = 80+Math.random()*(H-160);
-                this.r = 18+Math.random()*22;
-                this.notch = -Math.PI*.5+(Math.random()-0.5)*1.2;
-                this.drift = Math.random()*Math.PI*2;
-                this.driftSpd = 0.004+Math.random()*0.006;
-                this.hasFlower = Math.random()>0.45;
-                this.flowerCol = ['#f9c','#fad','#fff','#ffe','#ffc'][Math.floor(Math.random()*5)];
-                this.flowerPhase = Math.random()*Math.PI*2;
+                this.x = 80 + Math.random() * (W - 160);
+                this.y = 80 + Math.random() * (H - 160);
+                this.r = 18 + Math.random() * 22;
+                this.notch = -Math.PI * .5 + (Math.random() - 0.5) * 1.2;
+                this.drift = Math.random() * Math.PI * 2;
+                this.driftSpd = 0.004 + Math.random() * 0.006;
+                this.hasFlower = Math.random() > 0.45;
+                this.flowerCol = ['#f9c','#fad','#fff','#ffe','#ffc'][Math.floor(Math.random() * 5)];
+                this.flowerPhase = Math.random() * Math.PI * 2;
             }
             update() {
                 this.drift += this.driftSpd;
-                let gx=Math.floor(this.x/W*W_g), gy=Math.floor(this.y/H*H_g);
-                let wave=(gx>0&&gy>0&&gx<W_g-1&&gy<H_g-1)?b1[gy*W_g+gx]:0;
-                this.x += Math.sin(this.drift*.7)*.08+wave*.04;
-                this.y += Math.cos(this.drift*.5)*.06+wave*.03;
-                this.x=Math.max(this.r,Math.min(W-this.r,this.x));
-                this.y=Math.max(this.r,Math.min(H-this.r,this.y));
+                let gx = Math.floor(this.x / CFG.charW), gy = Math.floor(this.y / CFG.charH);
+                let wave = (gx > 0 && gy > 0 && gx < W_g - 1 && gy < H_g - 1) ? b2[gy * W_g + gx] : 0;
+                this.x += Math.sin(this.drift * .7) * .08 + wave * .04;
+                this.y += Math.cos(this.drift * .5) * .06 + wave * .03;
+                this.x = Math.max(this.r, Math.min(W - this.r, this.x));
+                this.y = Math.max(this.r, Math.min(H - this.r, this.y));
             }
             draw() {
-                let gx=Math.floor(this.x/W*W_g), gy=Math.floor(this.y/H*H_g);
-                let wave=(gx>0&&gy>0&&gx<W_g-1&&gy<H_g-1)?b1[gy*W_g+gx]:0;
-                X.save(); X.translate(this.x,this.y); X.rotate(wave*.04);
-                X.beginPath(); X.moveTo(0,0);
-                X.arc(0,0,this.r,this.notch+.38,this.notch+Math.PI*2-.38);
+                let gx = Math.floor(this.x / CFG.charW), gy = Math.floor(this.y / CFG.charH);
+                let wave = (gx > 0 && gy > 0 && gx < W_g - 1 && gy < H_g - 1) ? b2[gy * W_g + gx] : 0;
+                X.save(); X.translate(this.x, this.y); X.rotate(wave * .04);
+                X.beginPath(); X.moveTo(0, 0);
+                X.arc(0, 0, this.r, this.notch + .38, this.notch + Math.PI * 2 - .38);
                 X.closePath();
-                X.fillStyle='rgba(34,90,40,0.72)'; X.fill();
-                X.strokeStyle='rgba(80,160,70,0.4)'; X.lineWidth=0.8; X.stroke();
-                X.strokeStyle='rgba(50,120,50,0.35)'; X.lineWidth=0.5;
-                for(let v=0;v<5;v++) {
-                    let va=this.notch+0.5+v*(Math.PI*1.85/5);
-                    X.beginPath(); X.moveTo(0,0); X.lineTo(Math.cos(va)*this.r,Math.sin(va)*this.r); X.stroke();
+                X.fillStyle = 'rgba(34,90,40,0.65)'; X.fill();
+                X.strokeStyle = 'rgba(80,160,70,0.4)'; X.lineWidth = 0.8; X.stroke();
+                X.strokeStyle = 'rgba(50,120,50,0.35)'; X.lineWidth = 0.5;
+                for(let v = 0; v < 5; v++) {
+                    let va = this.notch + 0.5 + v * (Math.PI * 1.85 / 5);
+                    X.beginPath(); X.moveTo(0, 0); X.lineTo(Math.cos(va) * this.r, Math.sin(va) * this.r); X.stroke();
                 }
                 if(this.hasFlower) {
-                    let fp=this.flowerPhase+time*.4;
-                    let fx=Math.cos(fp)*this.r*.35, fy=Math.sin(fp*.7)*this.r*.3-this.r*.2;
-                    X.font=`${8+Math.sin(time*.8+this.flowerPhase)*1.5}px monospace`;
-                    X.fillStyle=this.flowerCol; X.globalAlpha=0.82;
-                    X.fillText('✿',fx,fy);
-                    X.font='6px monospace'; X.globalAlpha=1;
+                    let fp = this.flowerPhase + time * .4;
+                    let fx = Math.cos(fp) * this.r * .35, fy = Math.sin(fp * .7) * this.r * .3 - this.r * .2;
+                    X.font = `${8 + Math.sin(time * .8 + this.flowerPhase) * 1.5}px monospace`;
+                    X.fillStyle = this.flowerCol; X.globalAlpha = 0.82;
+                    X.fillText('✿', fx, fy);
+                    X.font = `${CFG.fontSize}px ${CFG.fontFamily}`; X.globalAlpha = 1;
                 }
                 X.restore();
             }
         }
 
-        // ── Dragonfly ─────────────────────────────────────────────────
-        const DF_FRAMES=[['┄','┼','┄'],['┈','╂','┈'],['╌','╀','╌']];
+        const DF_FRAMES = [['┄','┼','┄'],['┈','╂','┈'],['╌','╀','╌']];
         class Dragonfly {
             constructor() {
-                this.x=100+Math.random()*(W-200); this.y=60+Math.random()*H*.5;
-                this.vx=(Math.random()-.5)*1.2; this.vy=(Math.random()-.5)*.8;
-                this.ang=Math.random()*Math.PI*2;
-                this.frame=0; this.frameTimer=0;
-                this.state='PATROL'; this.stateTimer=0;
-                this.hoverTarget={x:0,y:0};
-                this.col=['#7ef','#adf','#9fe','#bff'][Math.floor(Math.random()*4)];
-                this.patrolOff=Math.random()*1000;
-                this.jitter={x:0,y:0};
-                this.nextLand=180+Math.random()*400;
-                this.eaten=false;
+                this.x = 100 + Math.random() * (W - 200); this.y = 60 + Math.random() * H * .5;
+                this.vx = (Math.random() - .5) * 1.2; this.vy = (Math.random() - .5) * .8;
+                this.ang = Math.random() * Math.PI * 2;
+                this.frame = 0; this.frameTimer = 0;
+                this.state = 'PATROL'; this.stateTimer = 0;
+                this.hoverTarget = {x: 0, y: 0};
+                this.col = ['#7ef','#adf','#9fe','#bff'][Math.floor(Math.random() * 4)];
+                this.patrolOff = Math.random() * 1000;
+                this.jitter = {x: 0, y: 0};
+                this.nextLand = 180 + Math.random() * 400;
+                this.eaten = false;
             }
             update() {
                 if(this.eaten) return;
-                let fspd=(this.state==='DESCENDING'||this.state==='ASCENDING')?1:1;
-                if(++this.frameTimer>=fspd){this.frameTimer=0;this.frame=(this.frame+1)%3;}
+                if(++this.frameTimer >= 1) { this.frameTimer = 0; this.frame = (this.frame + 1) % 3; }
                 this.stateTimer++;
-                this.jitter.x=(Math.random()-.5)*.25; this.jitter.y=(Math.random()-.5)*.15;
+                this.jitter.x = (Math.random() - .5) * .25; this.jitter.y = (Math.random() - .5) * .15;
 
-                if(this.state==='PATROL') {
-                    let t=time+this.patrolOff;
-                    let tx=W/2+Math.cos(t*.04)*W*.3+Math.sin(t*.09)*120;
-                    let ty=H*.25+Math.sin(t*.06)*H*.18;
-                    let dx=tx-this.x, dy=ty-this.y, dist=Math.sqrt(dx*dx+dy*dy)||1;
-                    this.vx+=(dx/dist)*.06; this.vy+=(dy/dist)*.04;
-                    this.vx*=.92; this.vy*=.92;
-                    this.x+=this.vx+this.jitter.x; this.y+=this.vy+this.jitter.y;
-                    this.ang=Math.atan2(this.vy,this.vx);
-                    if(--this.nextLand<=0) {
-                        this.hoverTarget.x=W*.2+Math.random()*W*.6;
-                        this.hoverTarget.y=H*.35+Math.random()*H*.35;
-                        this.state='DESCENDING'; this.stateTimer=0;
+                if(this.state === 'PATROL') {
+                    let t = time + this.patrolOff;
+                    let tx = W / 2 + Math.cos(t * .04) * W * .3 + Math.sin(t * .09) * 120;
+                    let ty = H * .25 + Math.sin(t * .06) * H * .18;
+                    let dx = tx - this.x, dy = ty - this.y, dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    this.vx += (dx / dist) * .06; this.vy += (dy / dist) * .04;
+                    this.vx *= .92; this.vy *= .92;
+                    this.x += this.vx + this.jitter.x; this.y += this.vy + this.jitter.y;
+                    this.ang = Math.atan2(this.vy, this.vx);
+                    if(--this.nextLand <= 0) {
+                        this.hoverTarget.x = W * .2 + Math.random() * W * .6;
+                        this.hoverTarget.y = H * .35 + Math.random() * H * .35;
+                        this.state = 'DESCENDING'; this.stateTimer = 0;
                     }
-                } else if(this.state==='DESCENDING') {
-                    let dx=this.hoverTarget.x-this.x, dy=this.hoverTarget.y-this.y;
-                    let dist=Math.sqrt(dx*dx+dy*dy)||1;
-                    this.vx+=(dx/dist)*.14; this.vy+=(dy/dist)*.10;
-                    this.vx*=.88; this.vy*=.88;
-                    this.x+=this.vx+this.jitter.x*.4; this.y+=this.vy+this.jitter.y*.4;
-                    if(dist<12||this.stateTimer>180) {
-                        this.x=this.hoverTarget.x; this.y=this.hoverTarget.y;
-                        this.vx=0; this.vy=0;
-                        this.state='HOVERING'; this.stateTimer=0;
-                        P.push({x:this.x,y:this.y,r:1,vx:0,vy:0,settled:true,isDragonfly:true,dfRef:this});
+                } else if(this.state === 'DESCENDING') {
+                    let dx = this.hoverTarget.x - this.x, dy = this.hoverTarget.y - this.y;
+                    let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    this.vx += (dx / dist) * .14; this.vy += (dy / dist) * .10;
+                    this.vx *= .88; this.vy *= .88;
+                    this.x += this.vx + this.jitter.x * .4; this.y += this.vy + this.jitter.y * .4;
+                    if(dist < 12 || this.stateTimer > 180) {
+                        this.x = this.hoverTarget.x; this.y = this.hoverTarget.y;
+                        this.vx = 0; this.vy = 0;
+                        this.state = 'HOVERING'; this.stateTimer = 0;
+                        P.push({x: this.x, y: this.y, r: 1, vx: 0, vy: 0, settled: true, isDragonfly: true, dfRef: this});
                     }
-                } else if(this.state==='HOVERING') {
-                    this.x+=Math.sin(time*3.2+this.patrolOff)*.4+this.jitter.x*.3;
-                    this.y+=Math.cos(time*2.1+this.patrolOff)*.25+this.jitter.y*.2;
-                    let myP=P.find(p=>p.dfRef===this);
-                    if(myP){myP.x=this.x;myP.y=this.y;}
-                    if(this.stateTimer>220+Math.random()*180) {
-                        let idx=P.findIndex(p=>p.dfRef===this);
-                        if(idx>=0) P.splice(idx,1);
-                        this.state='ASCENDING'; this.stateTimer=0;
+                } else if(this.state === 'HOVERING') {
+                    this.x += Math.sin(time * 3.2 + this.patrolOff) * .4 + this.jitter.x * .3;
+                    this.y += Math.cos(time * 2.1 + this.patrolOff) * .25 + this.jitter.y * .2;
+                    let myP = P.find(p => p.dfRef === this);
+                    if(myP) { myP.x = this.x; myP.y = this.y; }
+                    if(this.stateTimer > 220 + Math.random() * 180) {
+                        let idx = P.findIndex(p => p.dfRef === this);
+                        if(idx >= 0) P.splice(idx, 1);
+                        this.state = 'ASCENDING'; this.stateTimer = 0;
                     }
-                } else if(this.state==='ASCENDING') {
-                    this.vy-=.12; this.vx+=(Math.random()-.5)*.08;
-                    this.vx*=.93; this.vy*=.93;
-                    this.x+=this.vx+this.jitter.x; this.y+=this.vy+this.jitter.y;
-                    if(this.stateTimer>60){this.state='PATROL';this.stateTimer=0;this.nextLand=200+Math.random()*500;}
+                } else if(this.state === 'ASCENDING') {
+                    this.vy -= .12; this.vx += (Math.random() - .5) * .08;
+                    this.vx *= .96; this.vy *= .96;
+                    this.x += this.vx + this.jitter.x; this.y += this.vy + this.jitter.y;
+                    if(this.stateTimer > 60) { this.state = 'PATROL'; this.stateTimer = 0; this.nextLand = 200 + Math.random() * 500; }
                 }
-                this.x=Math.max(20,Math.min(W-20,this.x));
-                this.y=Math.max(10,Math.min(H-30,this.y));
+                this.x = Math.max(20, Math.min(W - 20, this.x));
+                this.y = Math.max(10, Math.min(H - 30, this.y));
             }
             draw() {
                 if(this.eaten) return;
-                let f=DF_FRAMES[this.frame], scale=1.6+(this.state==='HOVERING'?.2:0);
-                X.save(); X.translate(this.x,this.y);
-                X.rotate(this.state==='PATROL'?this.ang:this.state==='DESCENDING'?Math.PI*.5:0);
-                X.font=`${Math.round(6*scale)}px monospace`;
-                X.textAlign='center'; X.textBaseline='middle';
-                X.globalAlpha=this.state==='HOVERING'?.95:.82;
-                X.fillStyle=this.col;
-                let sp=5*scale;
-                X.fillText(f[0],-sp,0); X.fillText(f[1],0,0); X.fillText(f[2],sp,0);
-                X.globalAlpha=.18; X.fillStyle='#000'; X.fillText('·',0,3*scale);
-                X.globalAlpha=1; X.restore();
-                X.font='6px monospace';
-            }
-            beEaten() {
-                let idx=P.findIndex(p=>p.dfRef===this);
-                if(idx>=0) P.splice(idx,1);
-                splash(Math.floor(this.x/W*W_g),Math.floor(this.y/H*H_g),3,6);
-                this.eaten=true;
-                setTimeout(()=>{
-                    this.x=100+Math.random()*(W-200); this.y=40+Math.random()*H*.2;
-                    this.vx=(Math.random()-.5)*1.2; this.vy=(Math.random()-.5)*.8;
-                    this.state='PATROL'; this.stateTimer=0;
-                    this.nextLand=300+Math.random()*400; this.eaten=false;
-                }, 4000+Math.random()*3000);
+                let f = DF_FRAMES[this.frame], scale = 1.6 + (this.state === 'HOVERING' ? .2 : 0);
+                X.save(); X.translate(this.x, this.y);
+                X.rotate(this.state === 'PATROL' ? this.ang : this.state === 'DESCENDING' ? Math.PI * .5 : 0);
+                X.font = `${Math.round(CFG.fontSize * scale)}px monospace`;
+                X.textAlign = 'center'; X.textBaseline = 'middle';
+                X.globalAlpha = this.state === 'HOVERING' ? .95 : .82;
+                X.fillStyle = this.col;
+                let sp = 5 * scale;
+                X.fillText(f[0], -sp, 0); X.fillText(f[1], 0, 0); X.fillText(f[2], sp, 0);
+                X.globalAlpha = .18; X.fillStyle = '#000'; X.fillText('·', 0, 3 * scale);
+                X.globalAlpha = 1; X.restore();
             }
         }
 
-        // ── Init ──────────────────────────────────────────────────────
-        for(let i=0;i<6;i++) PADS.push(new LilyPad());
-        for(let i=0;i<2;i++) DF.push(new Dragonfly());
-        for(let i=0;i<5;i++) K.push(new Koi());
-        K.sort((a,b)=>a.s-b.s);
+        // =====================================================================
+        // 4. MAIN PROGRAM LIFE CYCLE
+        // =====================================================================
+        for(let i = 0; i < 6; i++) PADS.push(new LilyPad());
+        for(let i = 0; i < 2; i++) DF.push(new Dragonfly());
+        for(let i = 0; i < 5; i++) K.push(new Koi());
 
-        // ── Main Loop ─────────────────────────────────────────────────
         function loop() {
             time += .016;
 
-            // wave sim
-            for(let y=1;y<H_g-1;y++) {
-                let rowStr="";
-                for(let x=1;x<W_g-1;x++) {
-                    let i=y*W_g+x;
-                    b2[i]=((b1[i-W_g]+b1[i+W_g]+b1[i-1]+b1[i+1])/2.3-b2[i])*.85;
-                    let idx=Math.max(0,Math.min(wavechars.length-1,Math.floor(((b2[i]+3)/10)*wavechars.length)));
-                    rowStr+=wavechars[idx];
+            // Fluid Wave Automata Execution
+            for(let y = 1; y < H_g - 1; y++) {
+                const step = y * W_g;
+                for(let x = 1; x < W_g - 1; x++) {
+                    const idx = step + x;
+                    b2[idx] = ((b1[idx - W_g] + b1[idx + W_g] + b1[idx - 1] + b1[idx + 1]) / 2.6 - b2[idx]) * .95;
                 }
-                outRows[y]=rowStr;
             }
-            let tmp=b1; b1=b2; b2=tmp;
-            bg.textContent=outRows.join('\n');
+            // Swap buffer array allocation pointer rings
+            let tmp = b1; b1 = b2; b2 = tmp;
 
-            X.clearRect(0,0,W,H);
+            // Clear frame base context
+            X.fillStyle = CFG.colorBg;
+            X.fillRect(0, 0, W, H);
 
-            // lily pads under everything
-            for(let i=0;i<PADS.length;i++){PADS[i].update();PADS[i].draw();}
+            // TrueColor Horizontal Run-Length Rasterizer Injection
+            X.font = `${CFG.fontSize}px ${CFG.fontFamily}`;
+            X.textAlign = 'left';
+            X.textBaseline = 'top';
 
-            // food pellets
-            for(let i=P.length-1;i>=0;i--) {
-                let p=P[i];
+            for(let y = 0; y < H_g; y++) {
+                let runString = "";
+                let runColor = "";
+                let runStartX = 0;
+                const step = y * W_g;
+
+                for(let x = 0; x < W_g; x++) {
+                    let v = b2[step + x];
+                    let idx = Math.max(0, Math.min(wavechars.length - 1, Math.floor(((v + 2) / 10) * wavechars.length)));
+                    let char = wavechars[idx];
+                    let color = CFG.colorCalmWater;
+
+                    // Dynamic TrueColor Mapping Pipeline
+                    if(v > 1.6) {
+                        color = CFG.colorFoam;
+                    } else if(v > 0.2 || v < -0.2) {
+                        color = CFG.colorRipple;
+                    } else {
+                        color = CFG.colorDeepWater;
+                        if(idx === 2) char = "·"; // Mute middle noise ranges
+                    }
+
+                    if(x === 0) {
+                        runColor = color;
+                        runString = char;
+                        runStartX = 0;
+                    } else if(color === runColor) {
+                        runString += char;
+                    } else {
+                        X.fillStyle = runColor;
+                        X.fillText(runString, runStartX * CFG.charW, y * CFG.charH);
+                        runColor = color;
+                        runString = char;
+                        runStartX = x;
+                    }
+                }
+                if(runString.length > 0) {
+                    X.fillStyle = runColor;
+                    X.fillText(runString, runStartX * CFG.charW, y * CFG.charH);
+                }
+            }
+
+            // Standardize generic canvas alignment bounds for overlay entities
+            X.textAlign = 'center';
+            X.textBaseline = 'middle';
+
+            // Layer 2: Drifting Lily pads
+            for(let i = 0; i < PADS.length; i++) { PADS[i].update(); PADS[i].draw(); }
+
+            // Layer 3: Particle Food Pellets
+            for(let i = P.length - 1; i >= 0; i--) {
+                let p = P[i];
                 if(p.r && !p.settled) {
-                    if(p.vy>=0){
-                        p.vx=0;p.vy=0;p.settled=true;
-                        splash(Math.floor(p.x/W*W_g),Math.floor(p.y/H*H_g),1,2.5);
-                    } else { p.x+=p.vx; p.y+=p.vy; p.vy+=.12; }
+                    if(p.vy >= 0) {
+                        p.vx = 0; p.vy = 0; p.settled = true;
+                        splash(Math.floor(p.x / CFG.charW), Math.floor(p.y / CFG.charH), 1, 3.5);
+                    } else { p.x += p.vx; p.y += p.vy; p.vy += .12; }
                 }
-                if(p.x<-20||p.x>W+20||p.y<-20||p.y>H+20){P.splice(i,1);continue;}
+                if(p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20) { P.splice(i, 1); continue; }
                 if(!p.isDragonfly) {
-                    X.fillStyle='#d2b48c';
-                    X.fillText('°',p.x-3,p.y-3); X.fillText('°',p.x+2,p.y+2); X.fillText('•',p.x,p.y);
+                    X.fillStyle = '#d2b48c';
+                    X.fillText('°', p.x - 3, p.y - 3); X.fillText('°', p.x + 2, p.y + 2); X.fillText('•', p.x, p.y);
                 }
             }
 
-            // fish — sorted small-to-large so big ones render on top
-            K.sort((a,b)=>a.s-b.s);
-            for(let i=0;i<K.length;i++){K[i].update(K);K[i].draw();}
+            // Layer 4: Biological Organisms (Z-Sort Scale Hierarchy)
+K.sort((a, b) => a.s - b.s);
+const koiCount = K.length;           // <-- capture length before any spawns happen
+for(let i = 0; i < koiCount; i++) {  // <-- use cached number
+    K[i].update(K);
+    K[i].draw();
+}
 
-            // dragonflies above everything
-            for(let i=0;i<DF.length;i++){DF[i].update();DF[i].draw();}
+            // Layer 5: Flight State Insects
+            for(let i = 0; i < DF.length; i++) { DF[i].update(); DF[i].draw(); }
 
-            // food button
-            X.setTransform(1.8,0,0,1.8,W-30,H-30);
-            X.fillStyle='rgba(20,15,10,.6)'; X.fillRect(-16,-16,32,32);
-            X.strokeStyle='#3a2f24'; X.strokeRect(-16,-16,32,32);
-            X.fillStyle='#d2b48c'; X.fillText('FOOD',0,0);
+            // Layer 6: Static Telemetry UI Controls
+            X.setTransform(1.8, 0, 0, 1.8, W - 30, H - 30);
+            X.fillStyle = 'rgba(20,15,10,.6)'; X.fillRect(-16, -16, 32, 32);
+            X.strokeStyle = '#3a2f24'; X.strokeRect(-16, -16, 32, 32);
+            X.fillStyle = '#d2b48c'; X.font = '6px monospace'; X.fillText('FOOD', 0, 0);
             X.resetTransform();
 
             requestAnimationFrame(loop);
