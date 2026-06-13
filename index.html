@@ -23,6 +23,7 @@
             display: block; 
             width: 100vw; 
             height: 100vh;
+            filter: brightness(1.2);
         }
     </style>
 </head>
@@ -31,22 +32,17 @@
     <canvas id="termCanvas"></canvas>
 
     <script>
-        // =====================================================================
-        // 1. GLOBAL ENGINE CONFIGURATION
-        // =====================================================================
         const CFG = {
-            fontSize: 6,
+            fontSize: 8,
             fontFamily: "monospace",
-            charW: 3.2,   
-            charH: 7.2,   
-            
-            // TrueColor Liquid Gradients
-            colorBg:       "#000828",
-            colorDeepWater:"#1d2b3a",
-            colorCalmWater:"#25374a",
+            charW: 4,   
+            charH: 8,   
+            colorBg:       "#021024",
+            colorDeepWater:"#04183a",
+            colorCalmWater:"#062250",
             colorRipple:   "#52b0ef",
             colorFoam:     "#ffffff",
-            
+            entityFontSize: 6,
             maxFish: 12
         };
 
@@ -60,7 +56,6 @@
         const P = [], K = [], PADS = [], DF = [];
         const wavechars = "·░.◦▓◌○◍◉●";
 
-        // SERENITY CONSTANTS: Snap lingering subpixel noise to zero
         const WATER_DEADBAND = 0.008; 
 
         function resize() {
@@ -76,9 +71,6 @@
         window.onresize = resize;
         resize();
 
-        // =====================================================================
-        // 2. FLUID ACCELERATION CORE
-        // =====================================================================
         function splash(cx, cy, radius, force) {
             for(let y = -radius; y <= radius; y++) {
                 for(let x = -radius; x <= radius; x++) {
@@ -118,9 +110,6 @@
             black: '#10060E'
         };
 
-        // =====================================================================
-        // 3. ECOSYSTEM ENTITIES
-        // =====================================================================
         class Koi {
             constructor(x, y, parentScale) {
                 this.s = parentScale ? Math.max(0.3, parentScale * 0.55) : (0.3 + Math.random() * 0.45);
@@ -176,7 +165,7 @@
             }
 
             _updateGeom() {
-                this.thk = [2, 3, 3, 3, 3, 2.8, 2.2, 1.6, 1.2, .8, .5, .2].map(t => t * this.s * 1.4);
+                this.thk = [2, 2.5, 3, 3, 2.8, 2.8, 2.2, 1.6, 1.2, .8, .5, .2].map(t => t * this.s * 1.4);
                 this.spdBase = 0.35 + (1.0 - Math.min(this.s, 1.0)) * 0.3;
             }
 
@@ -214,15 +203,15 @@
                     if(d < md) { md = d; ta = i; }
                 }
 
-                if(ta >= 0 && md < 250000) {
+                if(ta >= 0 && md < 2500) {
                     let targetPellet = P[ta];
                     if(targetPellet) {
                         tx = targetPellet.x; ty = targetPellet.y; ts *= 1.4;
-                        if(md < 200 * this.s) {
+                        if(md < 100 * this.s) {
                             let pIdx = P.indexOf(targetPellet);
                             if(pIdx > -1) P.splice(pIdx, 1);
                             let isDF = targetPellet.isDragonfly && targetPellet.dfRef;
-                            if(isDF) targetPellet.dfRef.eaten = true;
+                            if(isDF) targetPellet.dfRef.beEaten();
                             this.eatFood(fishArray, isDF);
                             splash(Math.floor(h.x / CFG.charW), Math.floor(h.y / CFG.charH), Math.max(1, Math.round(this.s * 4)), 3 + this.s * 5);
                         }
@@ -242,7 +231,6 @@
                 if(h.x < -margin) h.x += W + margin * 2; else if(h.x > W + margin) h.x -= W + margin * 2;
                 if(h.y < -margin) h.y += H + margin * 2; else if(h.y > H + margin) h.y -= H + margin * 2;
 
-                // Subtle fluid trailing tracking
                 let hgx = Math.floor(h.x / CFG.charW);
                 let hgy = Math.floor(h.y / CFG.charH);
                 if(hgx > 0 && hgx < W_g - 1 && hgy > 0 && hgy < H_g - 1) {
@@ -290,14 +278,14 @@
 
         class LilyPad {
             constructor() {
-                this.x = 80 + Math.random() * (W - 160);
+                this.x = 20 + Math.random() * (W - 160);
                 this.y = 80 + Math.random() * (H - 160);
-                this.r = 18 + Math.random() * 22;
-                this.notch = -Math.PI * .5 + (Math.random() - 0.5) * 1.2;
-                this.drift = Math.random() * Math.PI * 2;
-                this.driftSpd = 0.004 + Math.random() * 0.006;
-                this.hasFlower = Math.random() > 0.45;
-                this.flowerCol = ['#f9c','#fad','#fff','#ffe','#ffc'][Math.floor(Math.random() * 5)];
+                this.r = 18 + Math.random() * 3;
+                this.notch = Math.random() * Math.PI * 2;
+                this.drift = Math.random() * Math.PI * 4;
+                this.driftSpd = 0.008 + Math.random() * 0.006;
+                this.hasFlower = Math.random() > 0.5;
+                this.flowerCol = ['#f9c','#fad','#fff','#ffe','#ffc'][Math.floor(Math.random() * 9)];
                 this.flowerPhase = Math.random() * Math.PI * 2;
             }
             update() {
@@ -317,7 +305,7 @@
                 X.arc(0, 0, this.r, this.notch + .38, this.notch + Math.PI * 2 - .38);
                 X.closePath();
                 X.fillStyle = 'rgba(34,90,40,0.65)'; X.fill();
-                X.strokeStyle = 'rgba(80,160,70,0.4)'; X.lineWidth = 0.8; X.stroke();
+                X.strokeStyle = 'rgba(80,160,70,0.4)'; X.lineWidth = 0.5; X.stroke();
                 X.strokeStyle = 'rgba(50,120,50,0.35)'; X.lineWidth = 0.5;
                 for(let v = 0; v < 5; v++) {
                     let va = this.notch + 0.5 + v * (Math.PI * 1.85 / 5);
@@ -329,7 +317,7 @@
                     X.font = `${8 + Math.sin(time * .8 + this.flowerPhase) * 1.5}px monospace`;
                     X.fillStyle = this.flowerCol; X.globalAlpha = 0.82;
                     X.fillText('✿', fx, fy);
-                    X.font = `${CFG.fontSize}px ${CFG.fontFamily}`; X.globalAlpha = 1;
+                    X.font = `${CFG.entityFontSize}px monospace`; X.globalAlpha = 1;
                 }
                 X.restore();
             }
@@ -347,8 +335,22 @@
                 this.col = ['#7ef','#adf','#9fe','#bff'][Math.floor(Math.random() * 4)];
                 this.patrolOff = Math.random() * 1000;
                 this.jitter = {x: 0, y: 0};
-                this.nextLand = 180 + Math.random() * 400;
+                this.nextLand = 180 + Math.random() * 1400;
                 this.eaten = false;
+            }
+            beEaten() {
+                this.eaten = true;
+                // respawn after a short delay, repositioned and reset to patrol
+                setTimeout(() => {
+                    this.x = 100 + Math.random() * (W - 200);
+                    this.y = 40 + Math.random() * H * 0.2;
+                    this.vx = (Math.random() - .5) * 1.2;
+                    this.vy = (Math.random() - .5) * .8;
+                    this.state = 'PATROL';
+                    this.stateTimer = 0;
+                    this.nextLand = 300 + Math.random() * 1400;
+                    this.eaten = false;
+                }, 4000 + Math.random() * 3000);
             }
             update() {
                 if(this.eaten) return;
@@ -396,14 +398,14 @@
                     this.vy -= .12; this.vx += (Math.random() - .5) * .08;
                     this.vx *= .96; this.vy *= .96;
                     this.x += this.vx + this.jitter.x; this.y += this.vy + this.jitter.y;
-                    if(this.stateTimer > 60) { this.state = 'PATROL'; this.stateTimer = 0; this.nextLand = 200 + Math.random() * 500; }
+                    if(this.stateTimer > 80) { this.state = 'PATROL'; this.stateTimer = 0; this.nextLand = 200 + Math.random() * 1500; }
                 }
                 this.x = Math.max(20, Math.min(W - 20, this.x));
                 this.y = Math.max(10, Math.min(H - 30, this.y));
             }
             draw() {
                 if(this.eaten) return;
-                let f = DF_FRAMES[this.frame], scale = 1.6 + (this.state === 'HOVERING' ? .2 : 0);
+                let f = DF_FRAMES[this.frame], scale = 1 + (this.state === 'HOVERING' ? .2 : 0);
                 X.save(); X.translate(this.x, this.y);
                 X.rotate(this.state === 'PATROL' ? this.ang : this.state === 'DESCENDING' ? Math.PI * .5 : 0);
                 X.font = `${Math.round(CFG.fontSize * scale)}px monospace`;
@@ -417,17 +419,13 @@
             }
         }
 
-        // =====================================================================
-        // 4. MAIN PROGRAM LIFE CYCLE
-        // =====================================================================
         for(let i = 0; i < 6; i++) PADS.push(new LilyPad());
-        for(let i = 0; i < 2; i++) DF.push(new Dragonfly());
+        for(let i = 0; i < 5; i++) DF.push(new Dragonfly());
         for(let i = 0; i < 5; i++) K.push(new Koi());
 
         function loop() {
             time += .016;
 
-            // Fluid Wave Automata Execution
             for(let y = 1; y < H_g - 1; y++) {
                 const step = y * W_g;
                 for(let x = 1; x < W_g - 1; x++) {
@@ -435,14 +433,11 @@
                     b2[idx] = ((b1[idx - W_g] + b1[idx + W_g] + b1[idx - 1] + b1[idx + 1]) / 2.6 - b2[idx]) * .95;
                 }
             }
-            // Swap buffer array allocation pointer rings
             let tmp = b1; b1 = b2; b2 = tmp;
 
-            // Clear frame base context
             X.fillStyle = CFG.colorBg;
             X.fillRect(0, 0, W, H);
 
-            // TrueColor Horizontal Run-Length Rasterizer Injection
             X.font = `${CFG.fontSize}px ${CFG.fontFamily}`;
             X.textAlign = 'left';
             X.textBaseline = 'top';
@@ -459,14 +454,13 @@
                     let char = wavechars[idx];
                     let color = CFG.colorCalmWater;
 
-                    // Dynamic TrueColor Mapping Pipeline
                     if(v > 1.6) {
                         color = CFG.colorFoam;
                     } else if(v > 0.2 || v < -0.2) {
                         color = CFG.colorRipple;
                     } else {
                         color = CFG.colorDeepWater;
-                        if(idx === 2) char = "·"; // Mute middle noise ranges
+                        if(idx === 2) char = "·";
                     }
 
                     if(x === 0) {
@@ -489,14 +483,12 @@
                 }
             }
 
-            // Standardize generic canvas alignment bounds for overlay entities
             X.textAlign = 'center';
             X.textBaseline = 'middle';
+            X.font = `${CFG.entityFontSize}px monospace`;
 
-            // Layer 2: Drifting Lily pads
             for(let i = 0; i < PADS.length; i++) { PADS[i].update(); PADS[i].draw(); }
 
-            // Layer 3: Particle Food Pellets
             for(let i = P.length - 1; i >= 0; i--) {
                 let p = P[i];
                 if(p.r && !p.settled) {
@@ -512,22 +504,19 @@
                 }
             }
 
-            // Layer 4: Biological Organisms (Z-Sort Scale Hierarchy)
 K.sort((a, b) => a.s - b.s);
-const koiCount = K.length;           // <-- capture length before any spawns happen
-for(let i = 0; i < koiCount; i++) {  // <-- use cached number
+const koiCount = K.length;
+for(let i = 0; i < koiCount; i++) {
     K[i].update(K);
     K[i].draw();
 }
 
-            // Layer 5: Flight State Insects
             for(let i = 0; i < DF.length; i++) { DF[i].update(); DF[i].draw(); }
 
-            // Layer 6: Static Telemetry UI Controls
             X.setTransform(1.8, 0, 0, 1.8, W - 30, H - 30);
             X.fillStyle = 'rgba(20,15,10,.6)'; X.fillRect(-16, -16, 32, 32);
             X.strokeStyle = '#3a2f24'; X.strokeRect(-16, -16, 32, 32);
-            X.fillStyle = '#d2b48c'; X.font = '6px monospace'; X.fillText('FOOD', 0, 0);
+            X.fillStyle = '#d2b48c'; X.font = '10px monospace'; X.fillText('FOOD', 0, 0);
             X.resetTransform();
 
             requestAnimationFrame(loop);
